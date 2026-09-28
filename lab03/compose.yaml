@@ -1,0 +1,35 @@
+# works with `podman compose` and `docker compose`, run from this directory
+name: automation-lab03
+
+services:
+  rates:
+    image: harbor.nickmessing.com/public/automation-lab03:latest
+    build:
+      context: ..
+      dockerfile: lab03/Containerfile
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Chisinau
+      RUN_ON_START: "true"
+      # the defaults, spelled out; remove any of these to fall back to them
+      JOBS: daily weekly
+      DAILY_SCHEDULE: "0 6 * * *"
+      DAILY_BASE: MDL
+      DAILY_QUOTE: EUR
+      DAILY_DAYS: "1"
+      WEEKLY_SCHEDULE: "0 17 * * 5"
+      WEEKLY_BASE: MDL
+      WEEKLY_QUOTE: USD
+      WEEKLY_DAYS: "7"
+      # a custom job, add its name to JOBS to enable it
+      MONTHLY_SCHEDULE: "0 7 1 * *"
+      MONTHLY_BASE: MDL
+      MONTHLY_QUOTE: EUR
+      MONTHLY_DAYS: "30"
+    volumes:
+      - rates-data:/var/lib/rates
+      - rates-logs:/var/log/lab03
+
+volumes:
+  rates-data:
+  rates-logs:

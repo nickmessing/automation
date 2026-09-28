@@ -1,0 +1,44 @@
+name: lab03 image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - lab02.nu
+      - lab03/**
+      - .containerignore
+      - .github/workflows/lab03.yml
+
+env:
+  IMAGE: harbor.nickmessing.com/public/automation-lab03
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    environment: Production
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: gacts/install-podman@v1
+
+      - name: Log in to Harbor
+        run: echo "$HARBOR_PASSWORD" | podman login harbor.nickmessing.com -u "$HARBOR_USERNAME" --password-stdin
+        env:
+          HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+          HARBOR_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
+
+      # --format docker: podman's default OCI format drops the Containerfile HEALTHCHECK
+      - name: Build container image
+        run: >
+          podman build --format docker --platform linux/amd64
+          --label org.opencontainers.image.revision=${{ github.sha }}
+          -f lab03/Containerfile
+          -t "$IMAGE:${{ github.sha }}" -t "$IMAGE:latest"
+          .
+
+      - name: Push image
+        run: |
+          podman push "$IMAGE:${{ github.sha }}"
+          podman push "$IMAGE:latest"
