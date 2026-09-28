@@ -64,3 +64,14 @@ Parameters:
   quote <string>: currency to convert to, e.g. USD
   date <string>: date in YYYY-MM-DD format, latest if omitted (optional)
 ```
+
+# Lab 03 — scheduled exchange rates
+
+Runs lab02 on a schedule in a Fedora container (supercronic, podman or docker), published to
+`harbor.nickmessing.com/public/automation-lab03`. See [lab03/readme.md](lab03/readme.md).
+
+```
+$> cd lab03
+$> podman compose up -d --build     # or: docker compose up -d --build
+$> podman compose logs -f
+```
