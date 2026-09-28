@@ -1,0 +1,87 @@
+# Jenkins with two SSH agents and a test server. Run `nu setup.nu` first.
+#   podman compose up -d --build
+# Docker: docker compose -f compose.yaml -f compose.docker.yaml up -d --build
+name: lab04-05
+
+services:
+  jenkins-controller:
+    build:
+      context: .
+      dockerfile: Containerfile.controller
+    container_name: jenkins-controller
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      # read by jenkins/casc.yaml and jenkins/jobs.groovy
+      SSH_AGENT_HOST_KEY: ${SSH_AGENT_HOST_KEY:?run nu setup.nu first}
+      ANSIBLE_AGENT_HOST_KEY: ${ANSIBLE_AGENT_HOST_KEY:?run nu setup.nu first}
+      REPO_URL: ${REPO_URL:-https://github.com/nickmessing/automation.git}
+      REPO_BRANCH: ${REPO_BRANCH:-main}
+      DEPLOY_BRANCH: ${DEPLOY_BRANCH:-main}
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - ./secrets/admin_password:/run/secrets/admin_password:ro,z
+      - ./secrets/jenkins_ssh_agent_key:/run/secrets/jenkins_ssh_agent_key:ro,z
+      - ./secrets/jenkins_ansible_agent_key:/run/secrets/jenkins_ansible_agent_key:ro,z
+      - ./secrets/ansible_test_server_key:/run/secrets/ansible_test_server_key:ro,z
+    networks:
+      - jenkins-network
+
+  # Rust builds (label rust-agent)
+  ssh-agent:
+    build:
+      context: .
+      dockerfile: Containerfile.ssh_agent
+    container_name: ssh-agent
+    environment:
+      JENKINS_AGENT_SSH_PUBKEY: ${JENKINS_AGENT_SSH_PUBKEY:?run nu setup.nu first}
+    volumes:
+      - jenkins_agent_volume:/home/jenkins/agent
+      - ./secrets/ssh_agent_host_key:/etc/ssh/ssh_host_ed25519_key:ro,z
+      - ./secrets/ssh_agent_host_key.pub:/etc/ssh/ssh_host_ed25519_key.pub:ro,z
+    depends_on:
+      - jenkins-controller
+    networks:
+      - jenkins-network
+
+  # ansible playbooks (label ansible-agent)
+  ansible-agent:
+    build:
+      context: .
+      dockerfile: Containerfile.ansible_agent
+    container_name: ansible-agent
+    environment:
+      JENKINS_AGENT_SSH_PUBKEY: ${ANSIBLE_AGENT_SSH_PUBKEY:?run nu setup.nu first}
+    volumes:
+      - ansible_agent_volume:/home/jenkins/agent
+      - ./secrets/ansible_agent_host_key:/etc/ssh/ssh_host_ed25519_key:ro,z
+      - ./secrets/ansible_agent_host_key.pub:/etc/ssh/ssh_host_ed25519_key.pub:ro,z
+      - ./secrets/known_hosts:/etc/ssh/ssh_known_hosts:ro,z
+    depends_on:
+      - jenkins-controller
+    networks:
+      - jenkins-network
+
+  # the server ansible configures and deploys to: http://localhost:8081
+  test-server:
+    build:
+      context: .
+      dockerfile: Containerfile.test_server
+    container_name: test-server
+    ports:
+      - "127.0.0.1:8081:80"
+    volumes:
+      - ./secrets/test_server_host_key:/etc/ssh/ssh_host_ed25519_key:ro,z
+      - ./secrets/test_server_host_key.pub:/etc/ssh/ssh_host_ed25519_key.pub:ro,z
+      - ./secrets/ansible_test_server_key.pub:/home/ansible/.ssh/authorized_keys:ro,z
+    networks:
+      - jenkins-network
+
+volumes:
+  jenkins_home:
+  jenkins_agent_volume:
+  ansible_agent_volume:
+
+networks:
+  jenkins-network:
+    driver: bridge

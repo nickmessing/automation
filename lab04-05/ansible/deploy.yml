@@ -1,0 +1,70 @@
+# Deploy a rates binary to test-server (lab05's deployment step).
+# Usage: ansible-playbook deploy.yml -e rates_binary=/path/to/rates
+
+- name: Make sure the server is configured
+  ansible.builtin.import_playbook: setup_test_server.yml
+
+- name: Deploy rates
+  hosts: test_servers
+  become: true
+  vars:
+    rates_port: 3000
+    rates_home: /opt/rates
+
+  tasks:
+    - name: Check that a binary was given
+      ansible.builtin.assert:
+        that: rates_binary is defined and rates_binary is file
+        fail_msg: "pass the binary with -e rates_binary=/path/to/rates"
+      delegate_to: localhost
+      become: false
+
+    - name: Look for a deployed version
+      ansible.builtin.stat:
+        path: "{{ rates_home }}/rates"
+        checksum_algorithm: sha256
+      register: current
+
+    - name: Keep the deployed version as rates.previous
+      ansible.builtin.copy:
+        src: "{{ rates_home }}/rates"
+        dest: "{{ rates_home }}/rates.previous"
+        remote_src: true
+        mode: "0755"
+      when: current.stat.exists and current.stat.checksum != lookup('ansible.builtin.pipe', 'sha256sum ' + rates_binary | quote).split()[0]
+
+    - name: Copy the new binary
+      ansible.builtin.copy:
+        src: "{{ rates_binary }}"
+        dest: "{{ rates_home }}/rates"
+        owner: root
+        group: root
+        mode: "0755"
+      register: binary
+
+    - name: Restart rates with the new binary
+      ansible.builtin.systemd_service:
+        name: rates
+        state: "{{ 'restarted' if binary.changed else 'started' }}"
+        enabled: true
+        daemon_reload: true
+
+    - name: Wait for rates to listen
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: "{{ rates_port }}"
+        timeout: 30
+
+    - name: Check the app directly and through Apache
+      ansible.builtin.uri:
+        url: "{{ item }}"
+        return_content: true
+      loop:
+        - "http://127.0.0.1:{{ rates_port }}/health"
+        - "http://127.0.0.1/health"
+      register: health
+      failed_when: health.json.status | default('') != 'ok'
+
+    - name: Show the deployed version
+      ansible.builtin.debug:
+        msg: "rates {{ health.results[0].json.version }} is live"

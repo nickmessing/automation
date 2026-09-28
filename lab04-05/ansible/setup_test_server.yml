@@ -1,0 +1,95 @@
+# Configure test-server to run rates behind Apache (lab05's setup_test_server.yml).
+# Idempotent: running it again changes nothing on a configured server.
+- name: Configure the test server
+  hosts: test_servers
+  become: true
+  vars:
+    rates_port: 3000
+    rates_home: /opt/rates
+    server_name: test-server
+
+  tasks:
+    - name: Install Apache
+      ansible.builtin.dnf:
+        name: httpd
+        state: present
+
+    - name: Create the rates system user
+      ansible.builtin.user:
+        name: rates
+        system: true
+        shell: /sbin/nologin
+        home: /var/lib/rates
+        create_home: false
+
+    - name: Create the application directory
+      ansible.builtin.file:
+        path: "{{ rates_home }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install the rates systemd unit
+      ansible.builtin.template:
+        src: templates/rates.service.j2
+        dest: /etc/systemd/system/rates.service
+        mode: "0644"
+      notify: Restart rates
+
+    - name: Disable the default welcome page
+      ansible.builtin.copy:
+        content: "# disabled by ansible, rates.conf serves /\n"
+        dest: /etc/httpd/conf.d/welcome.conf
+        mode: "0644"
+      notify: Reload httpd
+
+    - name: Configure the rates virtual host
+      ansible.builtin.template:
+        src: templates/rates-vhost.conf.j2
+        dest: /etc/httpd/conf.d/rates.conf
+        mode: "0644"
+      notify: Reload httpd
+
+    - name: Allow Apache to proxy to the app (SELinux)
+      ansible.posix.seboolean:
+        name: httpd_can_network_connect
+        state: true
+        persistent: true
+      # containers have no SELinux of their own, a real Fedora server does
+      when: ansible_facts.selinux.status | default('disabled') == 'enabled'
+
+    - name: Start Apache
+      ansible.builtin.systemd_service:
+        name: httpd
+        state: started
+        enabled: true
+
+    - name: Enable rates at boot
+      ansible.builtin.systemd_service:
+        name: rates
+        enabled: true
+        daemon_reload: true
+
+  handlers:
+    - name: Check the Apache config
+      ansible.builtin.command: httpd -t
+      changed_when: false
+      listen: Reload httpd
+
+    - name: Reload Apache
+      ansible.builtin.systemd_service:
+        name: httpd
+        state: reloaded
+      listen: Reload httpd
+
+    - name: Reload systemd units
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+      listen: Restart rates
+
+    # try-restart only restarts a running service, so this is a no-op before the first deploy
+    - name: Restart rates if it is running
+      ansible.builtin.command: systemctl try-restart rates
+      changed_when: true
+      listen: Restart rates
