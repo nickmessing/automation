@@ -1,11 +1,16 @@
 #!/usr/bin/env nu
 
-const root = path self | path dirname
+const script_dir = path self | path dirname
+
+# where data/ and error.log go, next to the script unless LAB02_ROOT is set
+def root []: nothing -> string {
+    $env.LAB02_ROOT? | default $script_dir
+}
 const api = "https://api.frankfurter.dev/v2"
 
 def log-error [context: string, message: string] {
     let line = $"(date now | format date '%Y-%m-%dT%H:%M:%S%:z') [ERROR] ($context): ($message)"
-    $line + "\n" | save --append ($root | path join "error.log")
+    $line + "\n" | save --append (root | path join "error.log")
 }
 
 # log the error to error.log, then raise it
@@ -58,7 +63,7 @@ def fetch [url: string, context: string] {
 }
 
 def save-data [name: string, data: any]: nothing -> string {
-    let data_dir = $root | path join "data"
+    let data_dir = root | path join "data"
     mkdir $data_dir
     let file = $data_dir | path join $"($name).json"
     $data | save --force $file
@@ -171,11 +176,12 @@ export def rate [
     date?: string,      # date in YYYY-MM-DD format, latest if omitted
     --from: string,     # start of a date range, draws a graph
     --to: string,       # end of the date range, today if omitted
+    --no-graph,         # skip the graph (it is also skipped when stdout is not a terminal)
 ] {
     if $from == null and $to == null {
         single-rate $base $quote $date
     } else {
-        range-rate $base $quote $date $from $to
+        range-rate $base $quote $date $from $to (not $no_graph and (is-terminal --stdout))
     }
 }
 
@@ -198,7 +204,7 @@ def single-rate [base: string, quote: string, date?: string] {
     print $"saved to ($file)"
 }
 
-def range-rate [base: string, quote: string, date?: string, from?: string, to?: string] {
+def range-rate [base: string, quote: string, date?: string, from?: string, to?: string, graph: bool = true] {
     let to = $to | default (date now | format date "%Y-%m-%d")
     let context = $"($base)->($quote) ($from | default '?')..($to)"
     if $date != null {
@@ -223,7 +229,7 @@ def range-rate [base: string, quote: string, date?: string, from?: string, to?: 
     let file = save-data $"($base)-($quote)-($first.date)_($last.date)" $data
 
     print $"(ansi white_bold)($base) → ($quote)(ansi reset), ($first.date) … ($last.date), ($data | length) (if ($data | length) == 1 { 'day' } else { 'days' })"
-    draw-graph $data
+    if $graph { draw-graph $data }
 
     let low = $data | sort-by rate | first
     let high = $data | sort-by rate | last

@@ -1,0 +1,4 @@
+# the build context is the repo root, only send what lab03/Containerfile copies
+*
+!lab02.nu
+!lab03/scheduler.nu
