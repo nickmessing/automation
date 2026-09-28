@@ -1,0 +1,4 @@
+# never send keys or build output to an image build
+secrets/
+.env
+app/target/

@@ -1,0 +1,17 @@
+# {{ ansible_managed }}
+[Unit]
+Description=rates: exchange rate chart page and JSON API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=rates
+Group=rates
+Environment=RATES_LISTEN=127.0.0.1:{{ rates_port }}
+ExecStart={{ rates_home }}/rates serve
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

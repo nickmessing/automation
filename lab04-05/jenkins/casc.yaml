@@ -1,0 +1,112 @@
+# Jenkins Configuration as Code: everything the assignments set up by hand in the UI.
+# Changes made in the UI are overwritten on the next restart; edit this file instead.
+jenkins:
+  systemMessage: "lab04-05: configured by jenkins/casc.yaml. UI changes are reset on restart."
+  # builds run on agents only
+  numExecutors: 0
+  mode: EXCLUSIVE
+
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: admin
+          name: Admin
+          password: "${readFile:/run/secrets/admin_password}"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+
+  globalNodeProperties:
+    - envVars:
+        env:
+          # the build pipeline triggers a deploy for this branch only
+          - key: DEPLOY_BRANCH
+            value: "${DEPLOY_BRANCH:-main}"
+
+  nodes:
+    - permanent:
+        name: ssh-agent1
+        nodeDescription: "Rust toolchain (Containerfile.ssh_agent)"
+        labelString: rust-agent
+        remoteFS: /home/jenkins/agent
+        numExecutors: 2
+        retentionStrategy: always
+        launcher:
+          ssh:
+            host: ssh-agent
+            port: 22
+            credentialsId: ssh-agent-key
+            launchTimeoutSeconds: 60
+            maxNumRetries: 20
+            retryWaitTime: 5
+            sshHostKeyVerificationStrategy:
+              manuallyProvidedKeyVerificationStrategy:
+                key: "${SSH_AGENT_HOST_KEY}"
+        nodeProperties:
+          - envVars:
+              env:
+                # ssh sessions do not get the image's PATH
+                - key: PATH+RUST
+                  value: /opt/cargo/bin
+    - permanent:
+        name: ansible-agent1
+        nodeDescription: "Ansible (Containerfile.ansible_agent)"
+        labelString: ansible-agent
+        remoteFS: /home/jenkins/agent
+        numExecutors: 1
+        retentionStrategy: always
+        launcher:
+          ssh:
+            host: ansible-agent
+            port: 22
+            credentialsId: ansible-agent-key
+            launchTimeoutSeconds: 60
+            maxNumRetries: 20
+            retryWaitTime: 5
+            sshHostKeyVerificationStrategy:
+              manuallyProvidedKeyVerificationStrategy:
+                key: "${ANSIBLE_AGENT_HOST_KEY}"
+        nodeProperties:
+          - envVars:
+              env:
+                - key: PATH+ANSIBLE
+                  value: /opt/ansible/bin
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          # SYSTEM: only Jenkins itself uses these, to launch the agents
+          - basicSSHUserPrivateKey:
+              scope: SYSTEM
+              id: ssh-agent-key
+              username: jenkins
+              description: "jenkins-controller -> ssh-agent"
+              privateKeySource:
+                directEntry:
+                  privateKey: "${readFile:/run/secrets/jenkins_ssh_agent_key}"
+          - basicSSHUserPrivateKey:
+              scope: SYSTEM
+              id: ansible-agent-key
+              username: jenkins
+              description: "jenkins-controller -> ansible-agent"
+              privateKeySource:
+                directEntry:
+                  privateKey: "${readFile:/run/secrets/jenkins_ansible_agent_key}"
+          # GLOBAL: pipelines load this into an ssh-agent for ansible
+          - basicSSHUserPrivateKey:
+              scope: GLOBAL
+              id: test-server-key
+              username: ansible
+              description: "ansible-agent -> test-server"
+              privateKeySource:
+                directEntry:
+                  privateKey: "${readFile:/run/secrets/ansible_test_server_key}"
+
+unclassified:
+  location:
+    url: "http://localhost:8080/"
+
+jobs:
+  - file: /usr/share/jenkins/casc/jobs.groovy

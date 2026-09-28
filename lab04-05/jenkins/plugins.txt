@@ -1,0 +1,21 @@
+# configuration
+configuration-as-code
+job-dsl
+# pipelines
+workflow-aggregator
+pipeline-graph-view
+git
+timestamper
+ansicolor
+# agents and credentials
+ssh-slaves
+ssh-agent
+ssh-credentials
+credentials-binding
+# reports and artifacts
+junit
+copyartifact
+# listed in the lab05 assignment
+docker-plugin
+docker-workflow
+github

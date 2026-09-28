@@ -1,0 +1,15 @@
+# {{ ansible_managed }}
+<VirtualHost *:80>
+    ServerName {{ server_name }}
+    ServerAlias localhost
+
+    ProxyPreserveHost On
+    ProxyPass        / http://127.0.0.1:{{ rates_port }}/
+    ProxyPassReverse / http://127.0.0.1:{{ rates_port }}/
+
+    # shown until the first deploy
+    ErrorDocument 503 "rates is not deployed yet, run the deploy job in Jenkins"
+
+    ErrorLog /var/log/httpd/rates-error.log
+    CustomLog /var/log/httpd/rates-access.log combined
+</VirtualHost>

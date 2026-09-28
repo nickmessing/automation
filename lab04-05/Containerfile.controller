@@ -1,0 +1,12 @@
+FROM docker.io/jenkins/jenkins:2.568.3-lts-jdk21
+
+# plugins are resolved at build time, so the controller starts ready to use
+COPY jenkins/plugins.txt /usr/share/jenkins/ref/plugins.txt
+RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
+
+COPY jenkins/casc.yaml /usr/share/jenkins/casc/jenkins.yaml
+COPY jenkins/jobs.groovy /usr/share/jenkins/casc/jobs.groovy
+
+# skip the setup wizard, JCasC creates the admin user
+ENV JAVA_OPTS="-Djenkins.install.runSetupWizard=false" \
+    CASC_JENKINS_CONFIG=/usr/share/jenkins/casc/jenkins.yaml

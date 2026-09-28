@@ -1,0 +1,15 @@
+# Jenkins SSH agent with a pinned ansible-core
+FROM docker.io/jenkins/ssh-agent:9.0.0-jdk21
+
+ARG ANSIBLE_CORE_VERSION=2.21.4
+ARG ANSIBLE_POSIX_VERSION=2.2.2
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl openssh-client python3 python3-venv \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN set -eux; \
+    python3 -m venv /opt/ansible; \
+    /opt/ansible/bin/pip install --no-cache-dir "ansible-core==${ANSIBLE_CORE_VERSION}"; \
+    /opt/ansible/bin/ansible-galaxy collection install --collections-path /usr/share/ansible/collections "ansible.posix:==${ANSIBLE_POSIX_VERSION}"; \
+    /opt/ansible/bin/ansible --version

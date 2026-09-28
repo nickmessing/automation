@@ -75,3 +75,15 @@ $> cd lab03
 $> podman compose up -d --build     # or: docker compose up -d --build
 $> podman compose logs -f
 ```
+
+# Labs 04–05 — Jenkins and Ansible
+
+Jenkins (configured as code) with a Rust build agent and an Ansible agent, a Fedora test server,
+and pipelines that build, test and deploy **rates**, a Rust port of lab02 with a web UI.
+See [lab04-05/readme.md](lab04-05/readme.md).
+
+```
+$> cd lab04-05
+$> nu setup.nu
+$> podman compose up -d --build     # Jenkins on :8080, the deployed app on :8081
+```
